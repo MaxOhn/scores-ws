@@ -1,0 +1,8 @@
+[config]
+interval = 30
+history_length = 100
+port = 7727
+
+[osu]
+client_id = 123
+client_secret = "abc"
