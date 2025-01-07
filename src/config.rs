@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read, ops::Not};
+use std::{fs::File, io::Read};
 
 use eyre::Context;
 use serde::Deserialize;
@@ -25,16 +25,25 @@ impl Config {
             .context("Failed to deserialize file `config.toml`")
             .unwrap();
 
+        Self::assert_valid_str(
+            "setup.log",
+            &config.setup.log,
+            &["info", "warn", "error", "debug", "trace"],
+        );
+
         if let Some(ruleset) = config.osu.ruleset.as_deref() {
-            if matches!(ruleset, "osu" | "taiko" | "fruits" | "mania").not() {
-                panic!(
-                    "If specified, `osu.ruleset` in `config.toml` must be \
-                    \"osu\", \"taiko\", \"fruits\", or \"mania\""
-                );
-            }
+            Self::assert_valid_str("osu.ruleset", ruleset, &["osu", "taiko", "fruits", "mania"]);
         }
 
         config
+    }
+
+    fn assert_valid_str(key: &str, value: &str, valid: &[&str]) {
+        if valid.contains(&value) {
+            return;
+        }
+
+        panic!("Unexpected value `{value}` for `{key}` in `config.toml`; must be any of {valid:?}");
     }
 }
 
