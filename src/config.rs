@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, ops::Not};
 
 use eyre::Context;
 use serde::Deserialize;
@@ -21,9 +21,20 @@ impl Config {
             .context("Failed to read file `config.toml`")
             .unwrap();
 
-        toml::from_str(&content)
+        let config: Self = toml::from_str(&content)
             .context("Failed to deserialize file `config.toml`")
-            .unwrap()
+            .unwrap();
+
+        if let Some(ruleset) = config.osu.ruleset.as_deref() {
+            if matches!(ruleset, "osu" | "taiko" | "fruits" | "mania").not() {
+                panic!(
+                    "If specified, `osu.ruleset` in `config.toml` must be \
+                    \"osu\", \"taiko\", \"fruits\", or \"mania\""
+                );
+            }
+        }
+
+        config
     }
 }
 
