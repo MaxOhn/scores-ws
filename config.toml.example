@@ -1,8 +1,11 @@
-[config]
-interval = 30
-history_length = 100
+[setup]
 port = 7727
+log = "info" # "info", "warn", "error", "debug", or "trace"
+interval = 30
+history_length = 1_000_000
+# resume_score_id = 123 # can be commented out
 
 [osu]
 client_id = 123
 client_secret = "abc"
+# ruleset = "osu" # "osu", "taiko", "fruits", "mania", or commented out
