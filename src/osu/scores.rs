@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use eyre::{Context as _, Result};
 use memchr::memmem;
+use tokio_tungstenite::tungstenite::Message;
 
 use std::{cmp::Ordering, collections::BTreeSet, ops::ControlFlow};
 
@@ -166,8 +167,8 @@ impl Score {
         self.id
     }
 
-    pub fn as_str(&self) -> &str {
-        std::str::from_utf8(&self.bytes).unwrap()
+    pub fn as_message(&self) -> Message {
+        Message::Binary(self.bytes.clone())
     }
 }
 

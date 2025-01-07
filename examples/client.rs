@@ -57,11 +57,11 @@ async fn main() {
 
 async fn process_scores<S: StreamExt<Item = Result<Message, Error>> + Unpin>(stream: &mut S) {
     while let Some(res) = stream.next().await {
-        let Ok(Message::Text(data)) = res else {
+        let Ok(Message::Binary(data)) = res else {
             panic!()
         };
 
-        // `data` is a JSON string of a score as sent by the osu!api
-        println!("{data}");
+        // `data` consists of JSON bytes of a score as sent by the osu!api
+        println!("{data:?}");
     }
 }

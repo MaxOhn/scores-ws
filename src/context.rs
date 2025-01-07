@@ -86,7 +86,7 @@ impl Context {
                 sent += 1;
 
                 for tx in pin.values() {
-                    let _: Result<_, _> = tx.send(Message::Text(score.as_str().into()));
+                    let _: Result<_, _> = tx.send(score.as_message());
                 }
             }
 
@@ -185,7 +185,7 @@ impl Context {
 
         for score in self.history.lock().unwrap().range(range) {
             sent += 1;
-            let _: Result<_, _> = tx.send(Message::Text(score.as_str().into()));
+            let _: Result<_, _> = tx.send(score.as_message());
         }
 
         info!(%addr, "Sent {sent} scores from the history");
