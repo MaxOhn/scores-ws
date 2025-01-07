@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicPtr, Ordering::SeqCst};
 
 use eyre::{Context, ContextCompat, Result};
 
@@ -11,7 +11,7 @@ pub struct Authorization {
 
 impl Authorization {
     pub fn as_str(&self) -> &str {
-        let ptr = self.ptr.load(Ordering::Acquire);
+        let ptr = self.ptr.load(SeqCst);
 
         unsafe { (*ptr).as_ref() }
     }
@@ -30,7 +30,7 @@ impl Authorization {
         let authorization = format!("Bearer {token}");
         let ptr = Box::into_raw(Box::new(authorization.into_boxed_str()));
 
-        let old = self.ptr.swap(ptr, Ordering::Release);
+        let old = self.ptr.swap(ptr, SeqCst);
         unsafe { old.drop_in_place() };
 
         Ok(())
@@ -47,7 +47,7 @@ impl Default for Authorization {
 
 impl Drop for Authorization {
     fn drop(&mut self) {
-        let ptr = self.ptr.load(Ordering::Acquire);
+        let ptr = self.ptr.load(SeqCst);
         unsafe { ptr.drop_in_place() };
     }
 }

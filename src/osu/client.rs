@@ -193,7 +193,7 @@ impl Osu {
                         bail!("Received 401 error after authorizing: {bytes:?}");
                     }
 
-                    osu.reauthorize().await?;
+                    osu.reauthorize().await.context("Failed to re-authorize")?;
 
                     return Box::pin(fetch_inner(osu, scores, true, with_cursor)).await;
                 }
