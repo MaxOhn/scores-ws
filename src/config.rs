@@ -68,10 +68,10 @@ impl Setup {
     }
 
     fn default_interval() -> u64 {
-        30
+        60
     }
 
     fn default_history_length() -> usize {
-        100
+        100_000
     }
 }

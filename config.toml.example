@@ -1,8 +1,8 @@
 [setup]
 port = 7727
 log = "info" # "info", "warn", "error", "debug", or "trace"
-interval = 30
-history_length = 1_000_000
+interval = 60
+history_length = 100_000
 # resume_score_id = 123 # can be commented out
 
 [osu]
