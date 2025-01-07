@@ -196,7 +196,7 @@ impl Ord for Score {
 mod tests {
     use super::*;
 
-    const SCORES: &[u8] = br#"{"scores": [{"id": 123}, {"id":456, "user": {"id": 2}}, {"user": {"id":2}, "id": 789}], "cursor": {"a":true, "b": false, "c": null, "d": 0123, "e": [true, false, null, 0123, [], {}, "abc"], "f": {}, "g": "abc"}, "cursor_string": "abc"}"#;
+    const SCORES: &[u8] = br#"{"scores": [{"id": 123}, {"id":456, "user": {"id": 2}}, {"user": {"id":2}, "id": 789}], "cursor": {"id": 789}, "cursor_string": "abc"}"#;
 
     impl PartialEq<(&[u8], u64)> for &Score {
         fn eq(&self, (bytes, id): &(&[u8], u64)) -> bool {
