@@ -18,14 +18,13 @@ use crate::{
 };
 
 type Sender = mpsc::UnboundedSender<Message>;
+type Outgoing = SplitSink<WebSocketStream<TcpStream>, Message>;
 
 pub struct Context {
     clients: HashMap<SocketAddr, Sender>,
     history: Mutex<BTreeSet<Score>>,
     max_history_len: usize,
 }
-
-type Outgoing = SplitSink<WebSocketStream<TcpStream>, Message>;
 
 impl Context {
     pub fn new(setup: &Setup) -> Self {
@@ -64,7 +63,7 @@ impl Context {
 
             trace!(oldest, newest, ?prev_newest);
 
-            while prev_newest.as_ref().is_some_and(|&prev| prev < oldest) {
+            while prev_newest.is_some_and(|prev| prev < oldest) {
                 osu.fetch_scores(&mut scores, true).await;
                 tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -195,7 +194,7 @@ impl Context {
         info!("Processing disconnect...");
 
         let id = self.history.lock().unwrap().last().map_or(0, Score::id);
-        let msg = Message::Text(id.to_string().into());
+        let msg = Message::Text(itoa::Buffer::new().format(id).into());
 
         if let Err(err) = outgoing.send(msg).await {
             warn!(?err, "Failed to send score id {id} on disconnect");
