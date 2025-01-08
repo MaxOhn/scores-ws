@@ -158,9 +158,7 @@ impl Osu {
 
             match status_code {
                 StatusCode::OK => {
-                    ScoresDeserializer::new(bytes)
-                        .deserialize(scores)
-                        .context("Failed to deserialize scores")?;
+                    ScoresDeserializer::new(bytes).deserialize(scores)?;
 
                     Ok(FetchResult::Ok)
                 }

@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use eyre::{Context as _, Result};
+use eyre::{Context as _, ContextCompat, Result};
 use memchr::memmem;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -37,16 +37,16 @@ impl ScoresDeserializer {
     pub fn deserialize(mut self, scores: &mut Scores) -> Result<()> {
         const SCORES: &[u8] = br#""scores":"#;
 
-        let start = memmem::find(&self.bytes, SCORES).ok_or(eyre!("missing scores"))?;
+        let start = memmem::find(&self.bytes, SCORES).context("Missing scores")?;
         self.idx = start + SCORES.len();
 
         self.deserialize_scores(scores)
-            .context("failed to deserialize scores")
+            .with_context(|| format!("Failed to deserialize scores; Bytes:\n{:?}", self.bytes))
     }
 
     fn deserialize_scores(&mut self, scores: &mut Scores) -> Result<()> {
         let start = Self::skip_whitespace_until(&self.bytes[self.idx..], |byte| byte == b'[')
-            .context("failed to skip until opening bracket")?;
+            .context("Failed to skip until opening bracket")?;
 
         self.idx += start + 1;
 
@@ -57,7 +57,7 @@ impl ScoresDeserializer {
 
                 return Ok(());
             }
-            _ => bail!("expected opening brace or closing bracket"),
+            _ => bail!("Expected opening brace or closing bracket"),
         }
 
         let mut parentheses = memchr::memchr2_iter(b'{', b'}', &self.bytes[self.idx..]);
@@ -86,7 +86,7 @@ impl ScoresDeserializer {
 
                 if let Some(id_idx) = memmem::find(slice, ID) {
                     let n = Self::peek_u64(&slice[id_idx + ID.len()..])
-                        .context("failed to peek u64")?;
+                        .context("Failed to peek u64")?;
 
                     id = Some(n);
                 }
@@ -105,14 +105,14 @@ impl ScoresDeserializer {
 
                     let id = id
                         .take()
-                        .ok_or_else(|| eyre!("missing id within bytes {bytes:?}"))?;
+                        .with_context(|| format!("Missing id within bytes {bytes:?}"))?;
 
                     scores.insert(Score { bytes, id });
 
                     match self.bytes[self.idx + i + 1] {
                         b',' => {}
                         b']' => break,
-                        _ => bail!("expected comma or closing bracket"),
+                        _ => bail!("Expected comma or closing bracket"),
                     }
                 }
                 _ => {}
@@ -131,15 +131,15 @@ impl ScoresDeserializer {
             .try_fold((), |_, (idx, &byte)| match byte {
                 b' ' => ControlFlow::Continue(()),
                 _ if until(byte) => ControlFlow::Break(Ok(idx)),
-                _ => ControlFlow::Break(Err(eyre!("unexpected character `{}`", byte as char))),
+                _ => ControlFlow::Break(Err(eyre!("Unexpected character `{}`", byte as char))),
             })
             .break_value()
-            .ok_or(eyre!("`until` condition never met"))?
+            .context("`until` condition never met")?
     }
 
     fn peek_u64(bytes: &[u8]) -> Result<u64> {
         let start = Self::skip_whitespace_until(bytes, |byte| byte.is_ascii_digit())
-            .context(eyre!("failed to skip until digit"))?;
+            .context("Failed to skip until digit")?;
 
         let n = bytes[start..]
             .iter()
