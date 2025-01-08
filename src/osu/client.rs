@@ -21,11 +21,14 @@ use super::{authorization::Authorization, Scores, ScoresDeserializer};
 
 const MY_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 const APPLICATION_JSON: &str = "application/json";
+const APPLICATION_URL_ENCODED: &str = "application/x-www-form-urlencoded";
+
+type Body = Full<Bytes>;
 
 pub struct Osu {
     config: OsuConfig,
     authorization: Authorization,
-    client: Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
+    client: Client<HttpsConnector<HttpConnector>, Body>,
 }
 
 impl Osu {
@@ -50,7 +53,7 @@ impl Osu {
         })
     }
 
-    async fn fetch_response(&self, req: Request<Full<Bytes>>) -> Result<(Bytes, StatusCode)> {
+    async fn fetch_response(&self, req: Request<Body>) -> Result<(Bytes, StatusCode)> {
         let response = self
             .client
             .request(req)
@@ -62,7 +65,7 @@ impl Osu {
         let bytes = incoming
             .collect()
             .await
-            .context("Failed to collect bytes of response")?
+            .context("Failed to collect bytes")?
             .to_bytes();
 
         Ok((bytes, parts.status))
@@ -87,12 +90,15 @@ impl Osu {
         let req = Request::post(URL)
             .header(USER_AGENT, MY_USER_AGENT)
             .header(ACCEPT, APPLICATION_JSON)
-            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(CONTENT_TYPE, APPLICATION_URL_ENCODED)
             .header(CONTENT_LENGTH, body.len())
             .body(Full::from(body))
             .context("Failed to create token request")?;
 
-        let (bytes, status_code) = self.fetch_response(req).await?;
+        let (bytes, status_code) = self
+            .fetch_response(req)
+            .await
+            .context("Failed to fetch response")?;
 
         match status_code {
             StatusCode::OK => self
@@ -154,7 +160,10 @@ impl Osu {
                 .body(Full::default())
                 .context("Failed to create request")?;
 
-            let (bytes, status_code) = osu.fetch_response(req).await?;
+            let (bytes, status_code) = osu
+                .fetch_response(req)
+                .await
+                .context("Failed to fetch response")?;
 
             match status_code {
                 StatusCode::OK => {
