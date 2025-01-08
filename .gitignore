@@ -2,3 +2,5 @@
 config.toml
 output.*
 /tests/custom*
+/examples/node_modules
+/examples/package*

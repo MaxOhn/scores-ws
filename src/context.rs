@@ -72,7 +72,7 @@ impl Context {
             }
 
             loop {
-                const ID_THRESHOLD: u64 = 800;
+                const ID_THRESHOLD: u64 = 900;
 
                 let next_cursor_id = scores.last().map(Score::id);
                 debug!(?next_cursor_id);
@@ -161,6 +161,7 @@ impl Context {
             let err = "Require initial message containing either `\"connect\"` \
                 or a score id to resume from";
             let _: Result<_, _> = outgoing.send(Message::Text(err.into())).await;
+            info!("Disconnecting from {addr} due to missing initial message");
 
             return;
         };
