@@ -20,7 +20,7 @@ use crate::config::OsuConfig;
 use super::{authorization::Authorization, Scores, ScoresDeserializer};
 
 const MY_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
-const ENDPOINT_URL: &str = "https://osu.ppy.sh/api/v2/scores";
+const APPLICATION_JSON: &str = "application/json";
 
 pub struct Osu {
     config: OsuConfig,
@@ -50,6 +50,24 @@ impl Osu {
         })
     }
 
+    async fn fetch_response(&self, req: Request<Full<Bytes>>) -> Result<(Bytes, StatusCode)> {
+        let response = self
+            .client
+            .request(req)
+            .await
+            .context("Failed to send request")?;
+
+        let (parts, incoming) = response.into_parts();
+
+        let bytes = incoming
+            .collect()
+            .await
+            .context("Failed to collect bytes of response")?
+            .to_bytes();
+
+        Ok((bytes, parts.status))
+    }
+
     async fn reauthorize(&self) -> Result<()> {
         const URL: &str = "https://osu.ppy.sh/oauth/token";
 
@@ -68,27 +86,15 @@ impl Osu {
 
         let req = Request::post(URL)
             .header(USER_AGENT, MY_USER_AGENT)
-            .header(ACCEPT, "application/json")
+            .header(ACCEPT, APPLICATION_JSON)
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .header(CONTENT_LENGTH, body.len())
             .body(Full::from(body))
             .context("Failed to create token request")?;
 
-        let response = self
-            .client
-            .request(req)
-            .await
-            .context("Failed to request token")?;
+        let (bytes, status_code) = self.fetch_response(req).await?;
 
-        let (parts, incoming) = response.into_parts();
-
-        let bytes = incoming
-            .collect()
-            .await
-            .context("Failed to collect bytes of token response")?
-            .to_bytes();
-
-        match parts.status {
+        match status_code {
             StatusCode::OK => self
                 .authorization
                 .parse(&bytes)
@@ -105,18 +111,50 @@ impl Osu {
             StatusCode::SERVICE_UNAVAILABLE => {
                 bail!("Received 503 error, osu! servers likely temporarily down: {bytes:?}")
             }
-            code => bail!("Status code: {code}, Response: {bytes:?}"),
+            _ => bail!("Status code: {status_code}, Response: {bytes:?}"),
         }
     }
 
     pub async fn fetch_scores(&self, scores: &mut Scores, cursor_id: Option<u64>) -> FetchResult {
+        const URL: &str = "https://osu.ppy.sh/api/v2/scores";
+
         async fn fetch_inner(
             osu: &Osu,
             scores: &mut Scores,
             just_authorized: bool,
             cursor_id: Option<u64>,
         ) -> Result<FetchResult> {
-            let (bytes, status_code) = osu.fetch_scores_response(cursor_id).await?;
+            let mut url = Cow::Borrowed(URL);
+
+            if let Some(ruleset) = osu.config.ruleset.as_deref() {
+                let url = url.to_mut();
+                url.push_str("?ruleset=");
+                url.push_str(ruleset);
+            }
+
+            if let Some(cursor_id) = cursor_id {
+                let is_without_query = matches!(url, Cow::Borrowed(_));
+                let url = url.to_mut();
+
+                if is_without_query {
+                    url.push('?');
+                } else {
+                    url.push('&');
+                }
+
+                url.push_str("cursor[id]=");
+                url.push_str(itoa::Buffer::new().format(cursor_id));
+            }
+
+            let req = Request::get(url.as_ref())
+                .header(USER_AGENT, MY_USER_AGENT)
+                .header(ACCEPT, APPLICATION_JSON)
+                .header(AUTHORIZATION, osu.authorization.as_str())
+                .header(CONTENT_LENGTH, "0")
+                .body(Full::default())
+                .context("Failed to create request")?;
+
+            let (bytes, status_code) = osu.fetch_response(req).await?;
 
             match status_code {
                 StatusCode::OK => {
@@ -165,65 +203,14 @@ impl Osu {
 
             match tokio::time::timeout(Duration::from_secs(10), fetch_fut).await {
                 Ok(Ok(res)) => return res,
-                Ok(Err(err)) => {
-                    error!(?err, "Failed to fetch scores, retrying in {backoff}s...");
-                }
-                Err(_) => {
-                    error!("Timeout while awaiting scores, retrying in {backoff}s...");
-                }
+                Ok(Err(err)) => error!(?err, "Failed to fetch scores"),
+                Err(_) => error!("Timeout while awaiting scores"),
             }
 
+            info!("Retrying in {backoff}s...");
             tokio::time::sleep(Duration::from_secs(backoff)).await;
             backoff = cmp::min(120, backoff * 2);
         }
-    }
-
-    async fn fetch_scores_response(&self, cursor_id: Option<u64>) -> Result<(Bytes, StatusCode)> {
-        let mut url = Cow::Borrowed(ENDPOINT_URL);
-
-        if let Some(ruleset) = self.config.ruleset.as_deref() {
-            let url = url.to_mut();
-            url.push_str("?ruleset=");
-            url.push_str(ruleset);
-        }
-
-        if let Some(cursor_id) = cursor_id {
-            let is_without_query = matches!(url, Cow::Borrowed(_));
-            let url = url.to_mut();
-
-            if is_without_query {
-                url.push('?');
-            } else {
-                url.push('&');
-            }
-
-            url.push_str("cursor[id]=");
-            url.push_str(itoa::Buffer::new().format(cursor_id));
-        }
-
-        let req = Request::get(url.as_ref())
-            .header(USER_AGENT, MY_USER_AGENT)
-            .header(ACCEPT, "application/json")
-            .header(AUTHORIZATION, self.authorization.as_str())
-            .header(CONTENT_LENGTH, "0")
-            .body(Full::default())
-            .context("Failed to create scores request")?;
-
-        let response = self
-            .client
-            .request(req)
-            .await
-            .context("Failed to request scores")?;
-
-        let (parts, incoming) = response.into_parts();
-
-        let bytes = incoming
-            .collect()
-            .await
-            .context("Failed to collect bytes of scores response")?
-            .to_bytes();
-
-        Ok((bytes, parts.status))
     }
 }
 
