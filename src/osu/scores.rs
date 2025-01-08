@@ -5,6 +5,8 @@ use tokio_tungstenite::tungstenite::Message;
 
 use std::{cmp::Ordering, collections::BTreeSet, ops::ControlFlow};
 
+pub type Scores = BTreeSet<Score>;
+
 /// Deserializes the osu!api response.
 ///
 /// The format is expected to be of the following form:
@@ -32,7 +34,7 @@ impl ScoresDeserializer {
         Self { bytes, idx: 0 }
     }
 
-    pub fn deserialize(mut self, scores: &mut BTreeSet<Score>) -> Result<()> {
+    pub fn deserialize(mut self, scores: &mut Scores) -> Result<()> {
         const SCORES: &[u8] = br#""scores":"#;
 
         let start = memmem::find(&self.bytes, SCORES).ok_or(eyre!("missing scores"))?;
@@ -42,7 +44,7 @@ impl ScoresDeserializer {
             .context("failed to deserialize scores")
     }
 
-    fn deserialize_scores(&mut self, scores: &mut BTreeSet<Score>) -> Result<()> {
+    fn deserialize_scores(&mut self, scores: &mut Scores) -> Result<()> {
         let start = Self::skip_whitespace_until(&self.bytes[self.idx..], |byte| byte == b'[')
             .context("failed to skip until opening bracket")?;
 
@@ -206,7 +208,7 @@ mod tests {
 
     #[test]
     fn deserialize() {
-        let mut scores = BTreeSet::new();
+        let mut scores = Scores::new();
 
         ScoresDeserializer::new(SCORES.into())
             .deserialize(&mut scores)

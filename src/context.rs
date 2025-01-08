@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeSet,
     net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
@@ -14,28 +13,30 @@ use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use crate::{
     config::Setup,
     event::Event,
-    osu::{Osu, Score},
+    osu::{FetchResult, Osu, Score, Scores},
 };
 
 type Sender = mpsc::UnboundedSender<Message>;
 type Outgoing = SplitSink<WebSocketStream<TcpStream>, Message>;
 
+const SECOND: Duration = Duration::from_secs(1);
+
 pub struct Context {
     clients: HashMap<SocketAddr, Sender>,
-    history: Mutex<BTreeSet<Score>>,
+    history: Mutex<Scores>,
     max_history_len: usize,
 }
 
 impl Context {
     pub fn new(setup: &Setup) -> Self {
         Self {
-            history: Mutex::new(BTreeSet::new()),
+            history: Mutex::new(Scores::new()),
             clients: HashMap::new(),
             max_history_len: setup.history_length,
         }
     }
 
-    pub async fn fetch_scores(ctx: Arc<Self>, osu: Osu, interval: u64) {
+    pub async fn fetch_scores(ctx: Arc<Self>, osu: Osu, interval: u64, mut cursor_id: Option<u64>) {
         let Context {
             clients,
             history,
@@ -45,38 +46,75 @@ impl Context {
         info!("Fetching scores every {interval} seconds...");
 
         let mut interval = tokio::time::interval(Duration::from_secs(interval));
-        let mut prev_newest = None;
-        let mut scores = BTreeSet::new();
+        let mut scores = Scores::new();
 
         loop {
             interval.tick().await;
 
-            osu.fetch_scores(&mut scores, false).await;
+            let prev_cursor_id = cursor_id;
 
-            let Some((mut oldest, newest)) = scores
-                .first()
-                .map(Score::id)
-                .zip(scores.last().map(Score::id))
-            else {
-                continue;
-            };
+            if let FetchResult::CursorTooOld = osu.fetch_scores(&mut scores, cursor_id).await {
+                if cursor_id.take().is_none() {
+                    // This should never happen; bug in osu! api
+                    error!("\"cursor too old\" but no cursor specified");
 
-            trace!(oldest, newest, ?prev_newest);
+                    continue;
+                }
 
-            while prev_newest.is_some_and(|prev| prev < oldest) {
-                osu.fetch_scores(&mut scores, true).await;
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(SECOND).await;
 
-                let Some(new_oldest) = scores.first().map(Score::id) else {
+                if let FetchResult::CursorTooOld = osu.fetch_scores(&mut scores, cursor_id).await {
+                    // We took the cursor id out previously so this is the same case as above
+                    error!("\"cursor too old\" but no cursor specified");
+
+                    continue;
+                }
+            }
+
+            loop {
+                const ID_THRESHOLD: u64 = 800;
+
+                let next_cursor_id = scores.last().map(Score::id);
+                debug!(?next_cursor_id);
+
+                let Some(next_cursor_id) = next_cursor_id else {
+                    cursor_id = None;
+
                     break;
                 };
 
-                trace!(new_oldest);
+                if cursor_id
+                    .replace(next_cursor_id)
+                    .is_none_or(|prev_cursor_id| next_cursor_id < prev_cursor_id + ID_THRESHOLD)
+                {
+                    // If either `cursor_id` was `None` or we did not receive
+                    // at least `ID_THRESHOLD` many new scores*, we stop
+                    // fetching more scores.
+                    //
+                    // In other words: our `ID_THRESHOLD` needs to be large
+                    // enough so that within our sleep interval (1 second),
+                    // it's very unlikely that the difference to the next score
+                    // id will be greater than our threshold. Additionally,
+                    // the threshold may not be larger than the maximum amount
+                    // of scores sent by the endpoint which is 1000.
+                    //
+                    // *: We don't really count new scores but consider the
+                    // difference in score id instead which should be roughly
+                    // proportional to score count.
+                    break;
+                }
 
-                oldest = new_oldest;
+                tokio::time::sleep(SECOND).await;
+
+                if let FetchResult::CursorTooOld = osu.fetch_scores(&mut scores, cursor_id).await {
+                    // This should never happen
+                    error!("The newly fetched cursor id {next_cursor_id} was too old");
+
+                    break;
+                }
             }
 
-            let range = scores.range(Score::only_id(prev_newest.map_or(0, |id| id + 1))..);
+            let range = scores.range(Score::only_id(prev_cursor_id.map_or(0, |id| id + 1))..);
 
             let pin = clients.pin();
             let mut sent = 0;
@@ -89,8 +127,6 @@ impl Context {
                 }
             }
 
-            prev_newest = Some(newest);
-
             trace!("Sent {sent} scores to {} client(s)", clients.len());
 
             let mut history = history.lock().unwrap();
@@ -100,7 +136,7 @@ impl Context {
                 history.pop_first();
             }
 
-            trace!(history_len = history.len());
+            debug!(history_len = history.len());
         }
     }
 

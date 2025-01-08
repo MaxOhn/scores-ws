@@ -3,6 +3,6 @@ mod client;
 mod scores;
 
 pub use self::{
-    client::Osu,
-    scores::{Score, ScoresDeserializer},
+    client::{FetchResult, Osu},
+    scores::{Score, Scores, ScoresDeserializer},
 };

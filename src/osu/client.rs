@@ -1,10 +1,4 @@
-use std::{
-    borrow::Cow,
-    cmp,
-    collections::BTreeSet,
-    sync::atomic::{AtomicU64, Ordering::SeqCst},
-    time::Duration,
-};
+use std::{borrow::Cow, cmp, time::Duration};
 
 use bytes::Bytes;
 use eyre::{Context as _, Result};
@@ -21,24 +15,21 @@ use hyper_util::{
 use memchr::memmem;
 use rustls::crypto::aws_lc_rs;
 
-use crate::{
-    config::OsuConfig,
-    osu::{Score, ScoresDeserializer},
-};
+use crate::config::OsuConfig;
 
-use super::authorization::Authorization;
+use super::{authorization::Authorization, Scores, ScoresDeserializer};
 
 const MY_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+const ENDPOINT_URL: &str = "https://osu.ppy.sh/api/v2/scores";
 
 pub struct Osu {
     config: OsuConfig,
     authorization: Authorization,
     client: Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
-    oldest_score_id: AtomicU64,
 }
 
 impl Osu {
-    pub fn new(config: OsuConfig, resume_score_id: Option<u64>) -> Result<Self> {
+    pub fn new(config: OsuConfig) -> Result<Self> {
         let crypto_provider = aws_lc_rs::default_provider();
 
         let https = HttpsConnectorBuilder::new()
@@ -56,18 +47,13 @@ impl Osu {
             config,
             client,
             authorization: Authorization::default(),
-            oldest_score_id: AtomicU64::new(resume_score_id.unwrap_or(0)),
         })
-    }
-
-    fn oldest_score_id(&self) -> u64 {
-        self.oldest_score_id.load(SeqCst)
     }
 
     async fn reauthorize(&self) -> Result<()> {
         const URL: &str = "https://osu.ppy.sh/oauth/token";
 
-        trace!("Re-authorizing...");
+        info!("Re-authorizing...");
 
         let OsuConfig {
             client_id,
@@ -123,70 +109,22 @@ impl Osu {
         }
     }
 
-    pub async fn fetch_scores(&self, scores: &mut BTreeSet<Score>, with_cursor: bool) {
+    pub async fn fetch_scores(&self, scores: &mut Scores, cursor_id: Option<u64>) -> FetchResult {
         async fn fetch_inner(
             osu: &Osu,
-            scores: &mut BTreeSet<Score>,
+            scores: &mut Scores,
             just_authorized: bool,
-            with_cursor: bool,
-        ) -> Result<()> {
-            const URL: &str = "https://osu.ppy.sh/api/v2/scores";
+            cursor_id: Option<u64>,
+        ) -> Result<FetchResult> {
+            let (bytes, status_code) = osu.fetch_scores_response(cursor_id).await?;
 
-            let mut url = Cow::Borrowed(URL);
-
-            if let Some(ref ruleset) = osu.config.ruleset {
-                let url = url.to_mut();
-                url.push_str("?ruleset=");
-                url.push_str(ruleset);
-            }
-
-            if with_cursor {
-                let is_without_query = matches!(url, Cow::Borrowed(_));
-                let url = url.to_mut();
-
-                if is_without_query {
-                    url.push('?');
-                } else {
-                    url.push('&');
-                }
-
-                url.push_str("cursor[id]=");
-                url.push_str(itoa::Buffer::new().format(osu.oldest_score_id()));
-            }
-
-            let req = Request::get(url.as_ref())
-                .header(USER_AGENT, MY_USER_AGENT)
-                .header(ACCEPT, "application/json")
-                .header(AUTHORIZATION, osu.authorization.as_str())
-                .header(CONTENT_LENGTH, "0")
-                .body(Full::default())
-                .context("Failed to create scores request")?;
-
-            let response = osu
-                .client
-                .request(req)
-                .await
-                .context("Failed to request scores")?;
-
-            let (parts, incoming) = response.into_parts();
-
-            let bytes = incoming
-                .collect()
-                .await
-                .context("Failed to collect bytes of scores response")?
-                .to_bytes();
-
-            match parts.status {
+            match status_code {
                 StatusCode::OK => {
                     ScoresDeserializer::new(bytes)
                         .deserialize(scores)
                         .context("Failed to deserialize scores")?;
 
-                    if let Some(score) = scores.first() {
-                        osu.oldest_score_id.store(score.id, SeqCst);
-                    }
-
-                    Ok(())
+                    Ok(FetchResult::Ok)
                 }
                 StatusCode::UNAUTHORIZED => {
                     if just_authorized {
@@ -195,14 +133,18 @@ impl Osu {
 
                     osu.reauthorize().await.context("Failed to re-authorize")?;
 
-                    return Box::pin(fetch_inner(osu, scores, true, with_cursor)).await;
+                    return Box::pin(fetch_inner(osu, scores, true, cursor_id)).await;
                 }
                 StatusCode::UNPROCESSABLE_ENTITY
                     if memmem::rfind(&bytes, br#""error":"cursor is too old""#).is_some() =>
                 {
-                    warn!("Cannot fetch up to score id {}", osu.oldest_score_id());
+                    if let Some(cursor_id) = cursor_id {
+                        warn!("Score id {cursor_id} too old to fetch from");
+                    } else {
+                        debug!("\"cursor too old\" without a cursor id");
+                    }
 
-                    Ok(())
+                    Ok(FetchResult::CursorTooOld)
                 }
                 StatusCode::TOO_MANY_REQUESTS => {
                     bail!("Received 429 error, try reducing your interval: {bytes:?}")
@@ -210,22 +152,19 @@ impl Osu {
                 StatusCode::SERVICE_UNAVAILABLE => {
                     bail!("Received 503 error, osu! servers likely temporarily down: {bytes:?}")
                 }
-                code => bail!("Status code: {code}, Response: {bytes:?}"),
+                _ => bail!("Status code: {status_code}, Response: {bytes:?}"),
             }
         }
 
-        trace!(
-            cursor_score_id = with_cursor.then(|| self.oldest_score_id()),
-            "Fetching scores..."
-        );
+        info!(?cursor_id, "Fetching scores...");
 
         let mut backoff = 2;
 
         loop {
-            let fetch_fut = fetch_inner(self, scores, false, with_cursor);
+            let fetch_fut = fetch_inner(self, scores, false, cursor_id);
 
             match tokio::time::timeout(Duration::from_secs(10), fetch_fut).await {
-                Ok(Ok(())) => return,
+                Ok(Ok(res)) => return res,
                 Ok(Err(err)) => {
                     error!(?err, "Failed to fetch scores, retrying in {backoff}s...");
                 }
@@ -238,4 +177,59 @@ impl Osu {
             backoff = cmp::min(120, backoff * 2);
         }
     }
+
+    async fn fetch_scores_response(&self, cursor_id: Option<u64>) -> Result<(Bytes, StatusCode)> {
+        let mut url = Cow::Borrowed(ENDPOINT_URL);
+
+        if let Some(ruleset) = self.config.ruleset.as_deref() {
+            let url = url.to_mut();
+            url.push_str("?ruleset=");
+            url.push_str(ruleset);
+        }
+
+        if let Some(cursor_id) = cursor_id {
+            let is_without_query = matches!(url, Cow::Borrowed(_));
+            let url = url.to_mut();
+
+            if is_without_query {
+                url.push('?');
+            } else {
+                url.push('&');
+            }
+
+            url.push_str("cursor[id]=");
+            url.push_str(itoa::Buffer::new().format(cursor_id));
+        }
+
+        let req = Request::get(url.as_ref())
+            .header(USER_AGENT, MY_USER_AGENT)
+            .header(ACCEPT, "application/json")
+            .header(AUTHORIZATION, self.authorization.as_str())
+            .header(CONTENT_LENGTH, "0")
+            .body(Full::default())
+            .context("Failed to create scores request")?;
+
+        let response = self
+            .client
+            .request(req)
+            .await
+            .context("Failed to request scores")?;
+
+        let (parts, incoming) = response.into_parts();
+
+        let bytes = incoming
+            .collect()
+            .await
+            .context("Failed to collect bytes of scores response")?
+            .to_bytes();
+
+        Ok((bytes, parts.status))
+    }
+}
+
+#[derive(Default)]
+pub enum FetchResult {
+    #[default]
+    Ok,
+    CursorTooOld,
 }

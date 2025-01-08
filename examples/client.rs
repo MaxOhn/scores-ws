@@ -26,7 +26,8 @@ async fn main() {
         _ = tokio::time::sleep(Duration::from_secs(10)) => {}
     }
 
-    // Let the websocket know we are about to disconnect
+    // Let the websocket know we are about to disconnect.
+    // This is not necessary but will allow us to resume later on.
     write.send(Message::from("disconnect")).await.unwrap();
 
     // As response, we'll receive a score id

@@ -32,14 +32,19 @@ async fn main() -> Result<()> {
     let filter = EnvFilter::new(format!("scores_ws={},info", setup.log));
     tracing_subscriber::fmt().with_env_filter(filter).init();
 
-    let osu = Osu::new(osu, setup.resume_score_id).context("Failed to create osu! client")?;
+    let osu = Osu::new(osu).context("Failed to create osu! client")?;
     let ctx = Arc::new(Context::new(&setup));
 
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, setup.port);
     let listener = TcpListener::bind(addr).await.unwrap();
     info!("Listening on {addr}...");
 
-    tokio::spawn(Context::fetch_scores(Arc::clone(&ctx), osu, setup.interval));
+    tokio::spawn(Context::fetch_scores(
+        Arc::clone(&ctx),
+        osu,
+        setup.interval,
+        setup.resume_score_id,
+    ));
 
     while let Ok(conn) = listener.accept().await {
         tokio::spawn(Context::handle_connection(Arc::clone(&ctx), conn));
