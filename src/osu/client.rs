@@ -154,9 +154,11 @@ impl Osu {
 
             let req = Request::get(url.as_ref())
                 .header(USER_AGENT, MY_USER_AGENT)
+                // doesn't seem to affect the response data format
+                // .header("x-api-version", 0_usize)
                 .header(ACCEPT, APPLICATION_JSON)
                 .header(AUTHORIZATION, osu.authorization.as_str())
-                .header(CONTENT_LENGTH, "0")
+                .header(CONTENT_LENGTH, 0_usize)
                 .body(Full::default())
                 .context("Failed to create request")?;
 
