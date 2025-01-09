@@ -72,7 +72,7 @@ impl Context {
             }
 
             loop {
-                const SCORES_THRESHOLD: usize = 800;
+                const SCORES_THRESHOLD: usize = 850;
                 const ID_THRESHOLD: u64 = 900;
 
                 let next_cursor_id = scores.last().map(Score::id);
@@ -130,7 +130,7 @@ impl Context {
                 }
             }
 
-            trace!("Sent {sent} scores to {} client(s)", clients.len());
+            info!("Sent {sent} scores to {} client(s)", clients.len());
 
             let mut history = history.lock().unwrap();
             history.append(&mut scores);
