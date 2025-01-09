@@ -10,7 +10,7 @@ pub enum Event {
 impl Event {
     fn parse_score_id(bytes: &[u8]) -> Option<u64> {
         bytes.iter().try_fold(0, |id, &byte| match byte {
-            b'0'..=b'9' => Some(id * 10 + (byte & 0xf) as u64),
+            b'0'..=b'9' => Some(id * 10 + u64::from(byte & 0xF)),
             _ => None,
         })
     }
@@ -36,6 +36,7 @@ impl TryFrom<Message> for Event {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub enum EventError {
     Bytes,

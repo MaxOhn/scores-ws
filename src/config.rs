@@ -60,6 +60,7 @@ pub struct Setup {
     pub resume_score_id: Option<u64>,
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Deserialize)]
 pub struct OsuConfig {
     pub client_id: u64,
@@ -72,15 +73,15 @@ impl Setup {
         Box::from("info")
     }
 
-    fn default_port() -> u16 {
+    const fn default_port() -> u16 {
         7277
     }
 
-    fn default_interval() -> u64 {
+    const fn default_interval() -> u64 {
         60
     }
 
-    fn default_history_length() -> usize {
+    const fn default_history_length() -> usize {
         100_000
     }
 }

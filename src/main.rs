@@ -32,6 +32,8 @@
 //! [examples]: https://github.com/MaxOhn/scores-ws/tree/main/examples
 //! [scores endpoint]: https://osu.ppy.sh/docs/index.html#scores
 
+#![warn(clippy::pedantic, clippy::missing_const_for_fn)]
+
 #[macro_use]
 extern crate eyre;
 

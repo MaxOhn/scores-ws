@@ -189,7 +189,7 @@ impl Context {
             None => return,
         };
 
-        ctx.send_history(resume_id, addr, tx);
+        ctx.send_history(resume_id, addr, &tx);
 
         let forward_fut = futures_util::stream::poll_fn(|cx| rx.poll_recv(cx))
             .map(Ok)
@@ -218,7 +218,7 @@ impl Context {
         ctx.clients.pin().remove(&addr);
     }
 
-    fn send_history(&self, resume_id: Option<u64>, addr: SocketAddr, tx: Sender) {
+    fn send_history(&self, resume_id: Option<u64>, addr: SocketAddr, tx: &Sender) {
         let range = Score::only_id(resume_id.map_or(0, |id| id + 1))..;
         let mut sent = 0;
 

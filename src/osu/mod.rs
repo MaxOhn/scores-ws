@@ -4,5 +4,5 @@ mod scores;
 
 pub use self::{
     client::{FetchResult, Osu},
-    scores::{Score, Scores, ScoresDeserializer},
+    scores::{Deserializer as ScoresDeserializer, Score, Scores},
 };

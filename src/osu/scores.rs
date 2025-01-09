@@ -24,13 +24,13 @@ pub type Scores = BTreeSet<Score>;
 /// really want that since we're interested in the *oldest* one. Hence, we skip
 /// deserializing them entirely and only handle scores; then use the scores'
 /// oldest id as cursor.
-pub struct ScoresDeserializer {
+pub struct Deserializer {
     bytes: Bytes,
     idx: usize,
 }
 
-impl ScoresDeserializer {
-    pub fn new(bytes: Bytes) -> Self {
+impl Deserializer {
+    pub const fn new(bytes: Bytes) -> Self {
         Self { bytes, idx: 0 }
     }
 
@@ -128,7 +128,7 @@ impl ScoresDeserializer {
         bytes
             .iter()
             .enumerate()
-            .try_fold((), |_, (idx, &byte)| match byte {
+            .try_fold((), |(), (idx, &byte)| match byte {
                 b' ' => ControlFlow::Continue(()),
                 _ if until(byte) => ControlFlow::Break(Ok(idx)),
                 _ => ControlFlow::Break(Err(eyre!("Unexpected character `{}`", byte as char))),
@@ -145,7 +145,7 @@ impl ScoresDeserializer {
             .iter()
             .copied()
             .take_while(u8::is_ascii_digit)
-            .fold(0, |n, byte| n * 10 + (byte & 0xF) as u64);
+            .fold(0, |n, byte| n * 10 + u64::from(byte & 0xF));
 
         Ok(n)
     }
@@ -158,14 +158,14 @@ pub struct Score {
 }
 
 impl Score {
-    pub fn only_id(id: u64) -> Self {
+    pub const fn only_id(id: u64) -> Self {
         Self {
             bytes: Bytes::new(),
             id,
         }
     }
 
-    pub fn id(&self) -> u64 {
+    pub const fn id(&self) -> u64 {
         self.id
     }
 
@@ -210,7 +210,7 @@ mod tests {
     fn deserialize() {
         let mut scores = Scores::new();
 
-        ScoresDeserializer::new(SCORES.into())
+        Deserializer::new(SCORES.into())
             .deserialize(&mut scores)
             .unwrap();
 
