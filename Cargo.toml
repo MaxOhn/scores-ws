@@ -2,6 +2,11 @@
 name = "scores-ws"
 version = "0.1.0"
 edition = "2021"
+authors = ["MaxOhn <ohn.m@hotmail.de>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/MaxOhn/scores-ws"
+description = "Stand-alone binary to fetch all osu! scores and forward them through websockets"
 
 [dependencies]
 bytes = "1.9.0"
@@ -21,3 +26,8 @@ tokio-tungstenite = { version = "0.26.1", features = ["rustls-tls-webpki-roots"]
 toml = { version = "0.8.19", default-features = false, features = ["parse"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
