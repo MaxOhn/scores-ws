@@ -171,6 +171,7 @@ jobs:
         mkdir -p "$ARCHIVE"/
         cp "$BIN" "$ARCHIVE"/
         cp README.md "$ARCHIVE"/
+        cp config.toml.example "$ARCHIVE"/config.toml
 
     - name: Build archive (Windows)
       shell: bash

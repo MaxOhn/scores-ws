@@ -28,7 +28,7 @@ impl Config {
         Self::assert_valid_str(
             "setup.log",
             &config.setup.log,
-            &["info", "warn", "error", "debug", "trace"],
+            &["info", "warn", "error", "debug", "trace", "off"],
         );
 
         if let Some(ruleset) = config.osu.ruleset.as_deref() {

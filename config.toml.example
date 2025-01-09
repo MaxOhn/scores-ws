@@ -1,11 +1,27 @@
 [setup]
+# The websocket will run on `127.0.0.1:{port}`
 port = 7727
-log = "info" # "info", "warn", "error", "debug", or "trace"
+# How detailed you want the logs to be.
+# Allowed values: "off", "error", "warn", "info", "debug", "trace"
+log = "info"
+# The interval in which the endpoint will be polled.
+# Recommended range: 15-150 (seconds)
 interval = 60
+# How many scores will be stored internally. Whenever you connect with
+# a new websocket, it'll send you the entire history (except when you
+# resume from a score id, in which case it'll only send scores from that
+# id onward)
 history_length = 100_000
-# resume_score_id = 123 # can be commented out
+# When starting `scores-ws`, this is the id it'll start fetching from.
+# Can stay commented out.
+# resume_score_id = 0
 
 [osu]
+# Client ID for the osu!api. *Must* be specified.
 client_id = 123
+# Client secret for the osu!api. *Must* be specified.
 client_secret = "abc"
-# ruleset = "osu" # "osu", "taiko", "fruits", "mania", or commented out
+# Only fetch scores from the specified ruleset (mode).
+# Allowed values: "osu", "taiko", "fruits", "mania"
+# Can stay commented out.
+# ruleset = "osu"
