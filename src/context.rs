@@ -72,6 +72,7 @@ impl Context {
             }
 
             loop {
+                const SCORES_THRESHOLD: usize = 800;
                 const ID_THRESHOLD: u64 = 900;
 
                 let next_cursor_id = scores.last().map(Score::id);
@@ -85,22 +86,24 @@ impl Context {
 
                 if cursor_id
                     .replace(next_cursor_id)
-                    .is_none_or(|prev_cursor_id| next_cursor_id < prev_cursor_id + ID_THRESHOLD)
+                    .is_none_or(|prev_cursor_id| {
+                        scores.len() < SCORES_THRESHOLD
+                            || next_cursor_id < prev_cursor_id + ID_THRESHOLD
+                    })
                 {
-                    // If either `cursor_id` was `None` or we did not receive
-                    // at least `ID_THRESHOLD` many new scores*, we stop
-                    // fetching more scores.
+                    // If either `cursor_id` was `None`, or we did not receive
+                    // at least `SCORES_THRESHOLD` many new scores, or the range
+                    // of most recent score ids is smaller than `ID_THRESHOLD`,
+                    // we stop fetching more scores.
                     //
-                    // In other words: our `ID_THRESHOLD` needs to be large
+                    // In other words: `SCORES_THRESHOLD` is only relevant for
+                    // the first iteration since `scores.len()` considers scores
+                    // from all iterations. Our `ID_THRESHOLD` needs to be large
                     // enough so that within our sleep interval (1 second),
                     // it's very unlikely that the difference to the next score
                     // id will be greater than our threshold. Additionally,
                     // the threshold may not be larger than the maximum amount
                     // of scores sent by the endpoint which is 1000.
-                    //
-                    // *: We don't really count new scores but consider the
-                    // difference in score id instead which should be roughly
-                    // proportional to score count.
                     break;
                 }
 
