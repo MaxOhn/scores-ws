@@ -148,9 +148,9 @@ jobs:
       run: |
         cargo build --verbose --release
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          bin="target/${{ matrix.target }}/release/scores-ws.exe"
+          bin="target/release/scores-ws.exe"
         else
-          bin="target/${{ matrix.target }}/release/scores-ws"
+          bin="target/release/scores-ws"
         fi
         echo "BIN=$bin" >> $GITHUB_ENV
 
