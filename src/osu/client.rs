@@ -13,7 +13,6 @@ use hyper_util::{
     rt::TokioExecutor,
 };
 use memchr::memmem;
-use rustls::crypto::aws_lc_rs;
 
 use crate::config::OsuConfig;
 
@@ -33,7 +32,14 @@ pub struct Osu {
 
 impl Osu {
     pub fn new(config: OsuConfig) -> Result<Self> {
-        let crypto_provider = aws_lc_rs::default_provider();
+        #[cfg(feature = "ring")]
+        let crypto_provider = rustls::crypto::ring::default_provider();
+        #[cfg(all(feature = "aws", not(feature = "ring")))]
+        let crypto_provider = rustls::crypto::aws_lc_rs::default_provider();
+        #[cfg(not(any(feature = "ring", feature = "aws")))]
+        let crypto_provider = rustls::crypto::CryptoProvider::get_default()
+            .expect("No default crypto provider installed or configured via crate features")
+            .clone();
 
         let https = HttpsConnectorBuilder::new()
             .with_provider_and_webpki_roots(crypto_provider)
