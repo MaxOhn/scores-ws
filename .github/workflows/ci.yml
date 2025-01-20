@@ -115,16 +115,13 @@ jobs:
         - build: linux
           os: ubuntu-latest
           target: x86_64-unknown-linux-musl
-          strip: x86_64-linux-musl-strip
         - build: stable-aarch64
           os: ubuntu-latest
           target: aarch64-unknown-linux-gnu
-          strip: aarch64-linux-gnu-strip
           qemu: qemu-aarch64
         - build: stable-arm-gnueabihf
           os: ubuntu-latest
           target: armv7-unknown-linux-gnueabihf
-          strip: arm-linux-gnueabihf-strip
           qemu: qemu-arm
         - build: macos
           os: macos-latest
