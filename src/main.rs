@@ -40,10 +40,7 @@ extern crate eyre;
 #[macro_use]
 extern crate tracing;
 
-use std::{
-    net::{Ipv4Addr, SocketAddrV4},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use eyre::{Context as _, Result};
 use osu::Osu;
@@ -67,7 +64,7 @@ async fn main() -> Result<()> {
     let osu = Osu::new(osu).context("Failed to create osu! client")?;
     let ctx = Arc::new(Context::new(&setup));
 
-    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, setup.port);
+    let addr = SocketAddr::new(setup.ip_addr, setup.port);
     let listener = TcpListener::bind(addr).await.unwrap();
     info!("Listening on {addr}...");
 

@@ -1,4 +1,8 @@
-use std::{fs::File, io::Read};
+use std::{
+    fs::File,
+    io::Read,
+    net::{IpAddr, Ipv4Addr},
+};
 
 use eyre::Context;
 use serde::Deserialize;
@@ -51,6 +55,8 @@ impl Config {
 pub struct Setup {
     #[serde(default = "Setup::default_log")]
     pub log: Box<str>,
+    #[serde(default = "Setup::default_ip_addr")]
+    pub ip_addr: IpAddr,
     #[serde(default = "Setup::default_port")]
     pub port: u16,
     #[serde(default = "Setup::default_interval")]
@@ -71,6 +77,10 @@ pub struct OsuConfig {
 impl Setup {
     fn default_log() -> Box<str> {
         Box::from("info")
+    }
+
+    const fn default_ip_addr() -> IpAddr {
+        IpAddr::V4(Ipv4Addr::LOCALHOST)
     }
 
     const fn default_port() -> u16 {

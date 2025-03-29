@@ -1,5 +1,6 @@
 [setup]
-# The websocket will run on `127.0.0.1:{port}`
+# The websocket will run on `{ip_addr}:{port}`
+ip_addr = "127.0.0.1"
 port = 7727
 # How detailed you want the logs to be.
 # Allowed values: "off", "error", "warn", "info", "debug", "trace"
