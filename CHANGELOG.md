@@ -1,4 +1,8 @@
-# 1.0.2 (2025-01-29)
+# 1.0.3 (2025-03-29)
+
+Adds `ip_addr` to `config.toml` to allow customization of the websocket ip.
+
+## 1.0.2 (2025-01-29)
 
 Building precompiled binaries on ubuntu 20.04 now to hopefully make them more
 accessible.
