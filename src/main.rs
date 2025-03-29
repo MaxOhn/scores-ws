@@ -9,7 +9,7 @@
 //!
 //! 3. Run `scores-ws`
 //!
-//! 4. Connect to `scores-ws` via websocket at `ws://127.0.0.1:{port of your config}`
+//! 4. Connect to `scores-ws` via websocket at `ws://{ip addr of your config}:{port of your config}`
 //!    and listen for scores. Check out the [examples] folder for some examples.
 //!
 //! ## How it works
@@ -27,6 +27,12 @@
 //! At any point you can send the string `"disconnect"` to the websocket. This will
 //! make the websocket respond with a score id and close the connection. This score
 //! id may be used later on to resume from with a new websocket connection.
+//! Alternatively, you can just use a score id from a score you recently received
+//! from the websocket and ignore this disconnect-message hassle.
+//!
+//! Since `scores-ws` runs separately, it allows you to have downtime on your actual
+//! app without missing any scores; at least assuming there won't be more scores than the
+//! configured history length during the downtime.
 //!
 //! [latest release]: https://github.com/MaxOhn/scores-ws/releases/latest
 //! [examples]: https://github.com/MaxOhn/scores-ws/tree/main/examples
